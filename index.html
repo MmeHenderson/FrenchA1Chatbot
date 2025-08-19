@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>French A1 Chatbot</title>
+  <style>
+    body {font-family: Arial, sans-serif; margin:20px;}
+    #chat {border:1px solid #ccc; padding:10px; width:350px; height:300px; overflow-y:auto; margin-bottom:10px;}
+    .msg {margin:5px 0;}
+    .bot {background:#f0f0f0; padding:5px; border-radius:5px;}
+    .user {background:#d0f0ff; padding:5px; border-radius:5px; text-align:right;}
+    #teacherPanel {border:1px solid #ccc; padding:10px; margin-top:10px; display:none;}
+    .good {color:green;}
+    .warn {color:orange;}
+  </style>
+</head>
+<body>
+  <h2>🤖 French A1 Chatbot</h2>
+  <label>Choisis un thème: 
+    <select id="topic">
+      <option value="intro">Introduction</option>
+      <option value="famille">Famille</option>
+      <option value="ecole">École</option>
+      <option value="nourriture">Nourriture</option>
+      <option value="loisirs">Loisirs</option>
+      <option value="meteo">Météo</option>
+    </select>
+  </label>
+  <button id="start">Commencer</button>
+  <span id="turn">Tour: 0</span>
+  
+  <div id="chat"></div>
+  
+  <input id="userText" placeholder="Tape ta réponse ici..." size="40">
+  <button id="send">Envoyer</button>
+  
+  <div>
+    <label><input type="checkbox" id="teacherMode"> Mode Professeur</label>
+    <div id="extraTeacher" style="display:none; margin-top:5px;">
+      <label><input type="checkbox" id="autoFb" checked> Feedback auto</label><br>
+      <button id="downloadTxt">Télécharger le transcript</button>
+    </div>
+  </div>
+  
+  <div id="teacherPanel">
+    <h3>Transcript</h3>
+    <div id="transcript"></div>
+  </div>
+  
+<script>
+/* --- Topics with keywords + model answers --- */
+const topics = {
+  intro: {steps:[
+    {q:"Salut ! Comment tu t’appelles ?", model:"Je m’appelle Alex.", must:["m'appelle"]},
+    {q:"Tu as quel âge ?", model:"J’ai douze ans.", must:["j'ai","ans"]},
+    {q:"Tu habites où ?", model:"J’habite à Toronto.", must:["j'habite"]}
+  ]},
+  
+  famille: {steps:[
+    {q:"As-tu des frères ou des sœurs ?", model:"Oui, j’ai un frère et une sœur.", must:["frère","sœur"]},
+    {q:"Comment s’appelle ton frère ?", model:"Il s’appelle Marc.", must:["il","s'appelle"]},
+    {q:"Et ta sœur ?", model:"Elle s’appelle Julie.", must:["elle","s'appelle"]}
+  ]},
+
+  ecole: {steps:[
+    {q:"Tu es dans quelle classe ?", model:"Je suis en septième.", must:["je suis"]},
+    {q:"Quelle est ta matière préférée ?", model:"Ma matière préférée est les mathématiques.", must:["ma matière préférée"]},
+    {q:"Comment est ton professeur de français ?", model:"Il est sympa.", must:["il est","elle est"]}
+  ]},
+
+  nourriture: {steps:[
+    {q:"Qu’est-ce que tu aimes manger ?", model:"J’aime manger la pizza.", must:["j'aime","manger"]},
+    {q:"Et qu’est-ce que tu n’aimes pas ?", model:"Je n’aime pas les champignons.", must:["je n'aime pas"]},
+    {q:"Qu’est-ce que tu bois au petit-déjeuner ?", model:"Je bois du jus d’orange.", must:["je bois"]}
+  ]},
+
+  loisirs: {steps:[
+    {q:"Tu aimes le sport ?", model:"Oui, j’aime le soccer.", must:["j'aime"]},
+    {q:"Quel sport est ton préféré ?", model:"Mon sport préféré est le basketball.", must:["mon sport préféré"]},
+    {q:"Qu’est-ce que tu fais le weekend ?", model:"Le weekend, je joue au foot et je regarde la télé.", must:["je","weekend"]}
+  ]},
+
+  meteo: {steps:[
+    {q:"Quel temps fait-il aujourd’hui ?", model:"Il fait beau.", must:["il fait"]},
+    {q:"Et demain ?", model:"Demain, il va faire froid.", must:["il va faire"]},
+    {q:"Quelle est ta saison préférée ?", model:"Ma saison préférée est l’été.", must:["ma saison préférée"]}
+  ]}
+};
+
+let stepIndex=0, activeTopic="intro";
+let transcript=[];
+
+function el(id){return document.getElementById(id);}
+function addMsg(text,who="bot"){
+  const div=document.createElement("div");
+  div.className="msg";
+  const bubble=document.createElement("div");
+  bubble.className=who;
+  bubble.innerHTML=text;
+  div.appendChild(bubble);
+  el("chat").appendChild(div);
+  el("chat").scrollTop=el("chat").scrollHeight;
+}
+function normalize(s){return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");}
+function checkAnswer(ans, step){
+  const norm=normalize(ans);
+  const must=step.must||[];
+  if(must.length && must.every(k=>norm.includes(normalize(k)))){
+    return "✅ Bien !";
+  } else if(must.length){
+    let missing = must.filter(k=>!norm.includes(normalize(k)));
+    return "🟡 Manque: « " + missing.join(", ") + " »<br>💡 Suggestion: " + step.model;
+  }
+  return "⚪ Réponse reçue<br>💡 Suggestion: " + step.model;
+}
+function botAsk(){
+  const step=topics[activeTopic].shuffled[stepIndex];
